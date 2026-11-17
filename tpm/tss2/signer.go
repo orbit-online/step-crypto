@@ -238,10 +238,19 @@ func (s *Signer) load(parent tpmutil.Handle) (tpmutil.Handle, error) {
 }
 
 // srkTemplates returns the SRK templates to try, in order, when loading key
-// under a permanent parent. RSA comes first, as that is what keys created by
-// the [go.step.sm/crypto/tpm] package use.
-func srkTemplates(*TPMKey) []tpm2.Public {
-	return []tpm2.Public{RSASRKTemplate, ECCSRKTemplate}
+// under a permanent parent. Keys marked rsaParent only use the RSA SRK. Keys
+// with a description, as go-tpm-keyfiles writes, try the ECC SRK first, and
+// other keys the RSA SRK, as keys created by the [go.step.sm/crypto/tpm]
+// package use.
+func srkTemplates(key *TPMKey) []tpm2.Public {
+	switch {
+	case key.RSAParent:
+		return []tpm2.Public{RSASRKTemplate}
+	case key.Description != "":
+		return []tpm2.Public{ECCSRKTemplate, RSASRKTemplate}
+	default:
+		return []tpm2.Public{RSASRKTemplate, ECCSRKTemplate}
+	}
 }
 
 // isIntegrityError reports whether err is the error TPM2_Load returns for a

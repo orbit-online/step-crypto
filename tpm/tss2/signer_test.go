@@ -342,6 +342,12 @@ var eccSRKH2Template = tpm2d.TPMTPublic{
 	}),
 }
 
+func withDescription(s string) TPMOption {
+	return func(k *TPMKey) {
+		k.Description = s
+	}
+}
+
 func TestSign_srkFallback(t *testing.T) {
 	rw := openTPM(t)
 	t.Cleanup(func() {
@@ -375,16 +381,19 @@ func TestSign_srkFallback(t *testing.T) {
 		srk           func(t *testing.T) tpmutil.Handle
 		corrupt       bool
 		secondLoadRC  uint32
+		opts          []TPMOption
 		wantTemplate  tpm2.Public
 		wantFirstLoad int
 		wantErrCode   tpm2.RCFmt1
 	}{
-		{"ok RSA SRK", rsaSRK, false, 0, RSASRKTemplate, 1, 0},
-		{"ok ECC H-2 SRK", eccH2SRK, false, 0, ECCSRKTemplate, 2, 0},
-		{"fail no fallback", eccH2SRK, true, 0, tpm2.Public{}, 1, tpm2.RCInsufficient},
+		{"ok RSA SRK", rsaSRK, false, 0, nil, RSASRKTemplate, 1, 0},
+		{"ok ECC H-2 SRK", eccH2SRK, false, 0, nil, ECCSRKTemplate, 2, 0},
+		{"ok ECC H-2 SRK with description", eccH2SRK, false, 0, []TPMOption{withDescription("ssh key")}, ECCSRKTemplate, 1, 0},
+		{"fail no fallback", eccH2SRK, true, 0, nil, tpm2.Public{}, 1, tpm2.RCInsufficient},
+		{"fail ECC H-2 SRK with rsaParent", eccH2SRK, false, 0, []TPMOption{WithRSAParent()}, tpm2.Public{}, 1, tpm2.RCIntegrity},
 		// The second Load fails with TPM_RC_SIZE on parameter 1 (0x1d5), and
 		// the error of the first one is returned.
-		{"fail first error", otherSRK, false, 0x1d5, tpm2.Public{}, 2, tpm2.RCIntegrity},
+		{"fail first error", otherSRK, false, 0x1d5, nil, tpm2.Public{}, 2, tpm2.RCIntegrity},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -398,7 +407,7 @@ func TestSign_srkFallback(t *testing.T) {
 			}
 
 			counter := &commandCounter{ReadWriter: rw, counts: map[tpmutil.Command]int{}, secondLoadRC: tt.secondLoadRC}
-			signer, err := CreateSigner(counter, New(pub, priv))
+			signer, err := CreateSigner(counter, New(pub, priv, tt.opts...))
 			require.NoError(t, err)
 
 			sum := sha256.Sum256([]byte("srk-fallback"))
