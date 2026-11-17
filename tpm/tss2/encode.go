@@ -19,6 +19,14 @@ func WithParent(parent tpmutil.Handle) TPMOption {
 	}
 }
 
+// WithRSAParent sets the [TPMKey] rsaParent field, marking a key under a
+// hierarchy as created under the RSA 2048 SRK instead of the ECC P-256 one.
+func WithRSAParent() TPMOption {
+	return func(t *TPMKey) {
+		t.RSAParent = true
+	}
+}
+
 // New creates a new [TPMKey] with the given public and private keys.
 func New(pub, priv []byte, opts ...TPMOption) *TPMKey {
 	key := &TPMKey{
